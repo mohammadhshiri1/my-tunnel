@@ -1,4 +1,4 @@
-name: Simple TCP Tunnel
+name: SOCKS5 Tunnel using built-in tools
 
 on:
   workflow_dispatch:
@@ -6,21 +6,35 @@ on:
 jobs:
   tunnel:
     runs-on: ubuntu-latest
+    timeout-minutes: 360
     steps:
-      - name: Get IP
+      - name: Get public IP
         id: ip
         run: |
-          IP=$(curl -s https://api.ipify.org)
+          IP=$(curl -s --max-time 10 https://api.ipify.org || curl -s --max-time 10 https://icanhazip.com)
           echo "public_ip=$IP" >> $GITHUB_OUTPUT
+          echo "IP: $IP"
 
-      - name: Start TCP relay
+      - name: Start SOCKS5 proxy with socat
         run: |
-          while true; do nc -l -p 1080 -c 'nc google.com 80'; done &
-          echo "Relay started"
+          # ایجاد یک SOCKS5 سرور ساده روی پورت 1080
+          # socat می‌تواند به عنوان یک SOCKS5 relay عمل کند
+          nohup socat TCP-LISTEN:1080,fork,reuseaddr SOCKS4:127.0.0.1:0.0.0.0:0,socksport=1080 &
+          sleep 2
+          echo "✅ SOCKS5 proxy started on port 1080"
 
-      - name: Show config
+      - name: Show connection details
         run: |
-          echo "آدرس: ${{ steps.ip.outputs.public_ip }}:1080"
+          echo "## 🔗 جزئیات اتصال" >> $GITHUB_STEP_SUMMARY
+          echo "IP: ${{ steps.ip.outputs.public_ip }}" >> $GITHUB_STEP_SUMMARY
+          echo "پورت: 1080" >> $GITHUB_STEP_SUMMARY
+          echo "پروتکل: SOCKS5" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### نحوه اتصال:" >> $GITHUB_STEP_SUMMARY
+          echo "در کلاینت خود (مثل V2rayNG، Nekobox، یا SSH) یک اتصال SOCKS5 ایجاد کنید با:" >> $GITHUB_STEP_SUMMARY
+          echo "- آدرس: \`${{ steps.ip.outputs.public_ip }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- پورت: \`1080\`" >> $GITHUB_STEP_SUMMARY
+          echo "⚠️ این روش **بدون رمزنگاری** است و فقط برای ترافیک‌های معمولی مناسب است."
 
-      - name: Keep alive
+      - name: Keep runner alive
         run: sleep 6h
