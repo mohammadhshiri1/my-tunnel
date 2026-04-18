@@ -1,12 +1,12 @@
 name: Xray Server on GitHub Runner
 
 on:
-  workflow_dispatch:  # فقط با اجرای دستی شروع می‌شود
+  workflow_dispatch:
 
 jobs:
   xray:
     runs-on: ubuntu-latest
-    timeout-minutes: 360  # 6 ساعت حداکثر (می‌توانید کمتر کنید)
+    timeout-minutes: 360
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -16,13 +16,40 @@ jobs:
         run: |
           PUBLIC_IP=$(curl -s https://api.ipify.org)
           echo "public_ip=$PUBLIC_IP" >> $GITHUB_OUTPUT
-          echo "IP: $PUBLIC_IP"
 
-      - name: Install Xray
+      - name: Install Xray via GitHub API
+        id: install_xray
         run: |
-          bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
+          # دریافت آخرین نسخه Xray از طریق GitHub API
+          LATEST_VERSION=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest | grep -oP '"tag_name": "\K(.*?)(?=")')
+          echo "آخرین نسخه Xray: $LATEST_VERSION"
+          
+          # دانلود باینری Xray برای لینوکس ۶۴ بیتی
+          DOWNLOAD_URL="https://github.com/XTLS/Xray-core/releases/download/${LATEST_VERSION}/Xray-linux-64.zip"
+          echo "در حال دانلود از آدرس: $DOWNLOAD_URL"
+          curl -L -o xray.zip "$DOWNLOAD_URL"
+          
+          # بررسی موفقیت دانلود
+          if [ ! -s xray.zip ]; then
+            echo "❌ خطا: دانلود فایل Xray انجام نشد."
+            exit 1
+          fi
+          
+          echo "دانلود با موفقیت انجام شد. حجم فایل: $(du -h xray.zip | cut -f1)"
+          
+          # استخراج فایل ZIP
+          unzip -o xray.zip -d xray_temp
+          sudo mv xray_temp/xray /usr/local/bin/
+          sudo chmod +x /usr/local/bin/xray
+          rm -rf xray_temp xray.zip
+          
+          echo "Xray با موفقیت نصب شد."
 
-      - name: Generate Xray config (Trojan with your username/password)
+      - name: Verify Xray installation
+        run: |
+          xray version
+
+      - name: Generate Xray config (Trojan with custom user/pass)
         run: |
           sudo mkdir -p /usr/local/etc/xray
           sudo tee /usr/local/etc/xray/config.json > /dev/null <<EOF
@@ -58,12 +85,10 @@ jobs:
           }
           EOF
 
-      - name: Start Xray
+      - name: Start Xray service
         run: |
           sudo systemctl start xray
           sudo systemctl enable xray
-          sleep 3
-          sudo systemctl status xray --no-pager
 
       - name: Generate config link
         id: config
@@ -71,13 +96,10 @@ jobs:
           IP="${{ steps.ip.outputs.public_ip }}"
           CONFIG="trojan://limo-sokhary@${IP}:443?security=tls&sni=www.microsoft.com#GitHub-Runner"
           echo "config_link=$CONFIG" >> $GITHUB_OUTPUT
-          echo "✅ کانفیگ شما ساخته شد:"
-          echo "$CONFIG"
 
-      - name: Save config to file (for later use)
+      - name: Save config to file
         run: |
           echo "${{ steps.config.outputs.config_link }}" > config.txt
-          echo "کانفیگ در فایل config.txt ذخیره شد."
 
       - name: Upload config as artifact
         uses: actions/upload-artifact@v4
@@ -88,12 +110,7 @@ jobs:
       - name: Show config in job summary
         run: |
           echo "## 🔗 لینک کانفیگ Trojan شما" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "```" >> $GITHUB_STEP_SUMMARY
           echo "${{ steps.config.outputs.config_link }}" >> $GITHUB_STEP_SUMMARY
-          echo "```" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "این لینک را در کلاینت خود (مثل Hiddify، Nekobox، V2rayNG) وارد کنید." >> $GITHUB_STEP_SUMMARY
 
-      - name: Keep runner alive for 6 hours
+      - name: Keep runner alive
         run: sleep 6h
