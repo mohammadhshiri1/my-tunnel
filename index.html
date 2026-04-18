@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="fa">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>پنل حرفه‌ای پروکسی</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0a0f1e; color: #e0e0e0; margin: 0; padding: 20px; }
+        .container { max-width: 1000px; margin: auto; background: #151e2c; border-radius: 15px; padding: 20px; box-shadow: 0 5px 20px rgba(0,0,0,0.3); }
+        h1, h2 { color: #3b82f6; text-align: center; }
+        .card { background: #1e2a3a; border-radius: 12px; padding: 15px; margin: 15px 0; }
+        .config-box { background: #0f172a; padding: 12px; border-radius: 8px; font-family: monospace; word-break: break-all; }
+        a { color: #60a5fa; text-decoration: none; }
+        button { background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; margin: 5px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 8px; text-align: center; border-bottom: 1px solid #334155; }
+        .footer { text-align: center; font-size: 12px; color: #6b7280; margin-top: 20px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🚀 پنل مدیریت پروکسی خودکار</h1>
+    <p>تاریخ آخرین بروزرسانی: 2026-04-18 23:04:31</p>
+
+    <div class="card">
+        <h2>🔗 لینک‌های سابسکریپشن (در کلاینت وارد کنید)</h2>
+        <div class="config-box">
+            📡 <strong>VLESS:</strong> <a href="https://mohammadhshiri1.github.io/my-tunnel/configs/vless.txt">https://mohammadhshiri1.github.io/my-tunnel/configs/vless.txt</a><br>
+            📡 <strong>VMESS:</strong> <a href="https://mohammadhshiri1.github.io/my-tunnel/configs/vmess.txt">https://mohammadhshiri1.github.io/my-tunnel/configs/vmess.txt</a><br>
+            📡 <strong>Trojan:</strong> <a href="https://mohammadhshiri1.github.io/my-tunnel/configs/trojan.txt">https://mohammadhshiri1.github.io/my-tunnel/configs/trojan.txt</a><br>
+            🔄 <strong>سابسکریپشن ترکیبی (Base64):</strong> <a href="https://mohammadhshiri1.github.io/my-tunnel/configs/subscription.txt">https://mohammadhshiri1.github.io/my-tunnel/configs/subscription.txt</a>
+        </div>
+        <button onclick="copyAllLinks()">📋 کپی همه لینک‌ها</button>
+    </div>
+
+    <div class="card">
+        <h2>🌐 IPهای تمیز فعال</h2>
+        <table>
+            <thead><tr><th>آدرس IP</th><th>پورت</th><th>وضعیت</th></tr></thead>
+            <tbody><tr><td>104.18.0.0</td><td>443</td><td>✅ فعال</td></tr><tr><td>104.16.0.0</td><td>443</td><td>✅ فعال</td></tr><tr><td>104.20.0.0</td><td>443</td><td>✅ فعال</td></tr><tr><td>172.67.0.0</td><td>443</td><td>✅ فعال</td></tr><tr><td>188.114.96.0</td><td>443</td><td>✅ فعال</td></tr></tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2>⚙️ تنظیمات UUID</h2>
+        <p>UUID فعلی: <code>b3e5e5b8-0e1d-4f8a-8e5c-6f2e5a1b9c8d</code></p>
+        <p>برای تغییر، در مخزن گیت‌هاب به <code>Settings → Secrets → UUID</code> بروید و سپس workflow را مجدد اجرا کنید.</p>
+    </div>
+
+    <div class="footer">
+        ساخته شده با ❤️ توسط GitHub Actions | بروزرسانی خودکار هر ۶ ساعت
+    </div>
+</div>
+<script>
+function copyAllLinks() {
+    const links = document.querySelectorAll('.config-box a');
+    let text = '';
+    links.forEach(link => text += link.href + '\n');
+    navigator.clipboard.writeText(text);
+    alert('✅ لینک‌ها کپی شدند');
+}
+</script>
+</body>
+</html>
