@@ -1,31 +1,146 @@
-- name: Install Xray via GitHub Mirror (gh-proxy)
-  id: install_xray
-  run: |
-    echo "🔄 Downloading Xray using GitHub Mirror (g.hk.uy)..."
-    
-    # دریافت آخرین نسخه Xray از طریق آینه
-    LATEST_VERSION=$(curl -s https://g.hk.uy/https://api.github.com/repos/XTLS/Xray-core/releases/latest | grep -oP '"tag_name": "\K(.*?)(?=")')
-    echo "✅ Latest Xray version: $LATEST_VERSION"
-    
-    # ساخت آدرس دانلود از طریق آینه
-    DOWNLOAD_URL="https://g.hk.uy/https://github.com/XTLS/Xray-core/releases/download/${LATEST_VERSION}/Xray-linux-64.zip"
-    echo "📥 Downloading from: $DOWNLOAD_URL"
-    
-    # دانلود فایل از طریق آینه
-    curl -L --max-time 60 -o xray.zip "$DOWNLOAD_URL"
-    
-    # بررسی موفقیت دانلود
-    if [ ! -s xray.zip ]; then
-      echo "❌ Error: Failed to download Xray binary from mirror."
-      exit 1
-    fi
-    
-    echo "✅ Download successful! File size: $(du -h xray.zip | cut -f1)"
-    
-    # استخراج و نصب
-    unzip -o xray.zip -d xray_temp
-    sudo mv xray_temp/xray /usr/local/bin/
-    sudo chmod +x /usr/local/bin/xray
-    rm -rf xray_temp xray.zip
-    
-    echo "🎉 Xray installed successfully!"
+name: Xray Server on GitHub Runner (Stable)
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+on:
+  workflow_dispatch:
+
+jobs:
+  xray:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.2.2
+
+      - name: Get public IP of runner
+        id: ip
+        run: |
+          echo "🌐 Fetching public IP address..."
+          PUBLIC_IP=$(curl -s --max-time 10 https://api.ipify.org || curl -s --max-time 10 https://icanhazip.com)
+          if [ -z "$PUBLIC_IP" ]; then
+            echo "❌ Failed to get public IP"
+            exit 1
+          fi
+          echo "public_ip=$PUBLIC_IP" >> $GITHUB_OUTPUT
+          echo "✅ Public IP: $PUBLIC_IP"
+
+      - name: Install Xray via GitHub Mirror (g.hk.uy)
+        id: install_xray
+        run: |
+          echo "🔄 Downloading Xray using GitHub Mirror (g.hk.uy)..."
+          
+          # دریافت آخرین نسخه Xray از طریق آینه
+          LATEST_VERSION=$(curl -s https://g.hk.uy/https://api.github.com/repos/XTLS/Xray-core/releases/latest | grep -oP '"tag_name": "\K(.*?)(?=")')
+          echo "✅ Latest Xray version: $LATEST_VERSION"
+          
+          # ساخت آدرس دانلود از طریق آینه
+          DOWNLOAD_URL="https://g.hk.uy/https://github.com/XTLS/Xray-core/releases/download/${LATEST_VERSION}/Xray-linux-64.zip"
+          echo "📥 Downloading from: $DOWNLOAD_URL"
+          
+          # دانلود فایل از طریق آینه
+          curl -L --max-time 60 -o xray.zip "$DOWNLOAD_URL"
+          
+          # بررسی موفقیت دانلود
+          if [ ! -s xray.zip ]; then
+            echo "❌ Error: Failed to download Xray binary from mirror."
+            exit 1
+          fi
+          
+          echo "✅ Download successful! File size: $(du -h xray.zip | cut -f1)"
+          
+          # استخراج و نصب
+          unzip -o xray.zip -d xray_temp
+          sudo mv xray_temp/xray /usr/local/bin/
+          sudo chmod +x /usr/local/bin/xray
+          rm -rf xray_temp xray.zip
+          
+          echo "🎉 Xray installed successfully!"
+
+      - name: Generate Xray config (Trojan)
+        run: |
+          echo "⚙️ Generating Xray config file..."
+          sudo mkdir -p /usr/local/etc/xray
+          sudo tee /usr/local/etc/xray/config.json > /dev/null <<EOF
+          {
+            "inbounds": [
+              {
+                "port": 443,
+                "protocol": "trojan",
+                "settings": {
+                  "clients": [
+                    {
+                      "password": "limo-sokhary",
+                      "email": "foxyjoon@example.com"
+                    }
+                  ]
+                },
+                "streamSettings": {
+                  "network": "tcp",
+                  "security": "tls",
+                  "tlsSettings": {
+                    "serverName": "www.microsoft.com",
+                    "allowInsecure": false
+                  }
+                }
+              }
+            ],
+            "outbounds": [
+              {
+                "protocol": "freedom",
+                "tag": "direct"
+              }
+            ]
+          }
+          EOF
+
+      - name: Start Xray service
+        run: |
+          echo "▶️ Starting Xray..."
+          if command -v systemctl &> /dev/null; then
+            sudo systemctl daemon-reload
+            sudo systemctl start xray
+            sudo systemctl enable xray
+            sleep 2
+            sudo systemctl status xray --no-pager || true
+          else
+            nohup sudo xray run -config /usr/local/etc/xray/config.json > /var/log/xray.log 2>&1 &
+            sleep 2
+            ps aux | grep xray
+          fi
+          echo "✅ Xray service started"
+
+      - name: Generate config link
+        id: config
+        run: |
+          IP="${{ steps.ip.outputs.public_ip }}"
+          CONFIG="trojan://limo-sokhary@${IP}:443?security=tls&sni=www.microsoft.com#GitHub-Runner"
+          echo "config_link=$CONFIG" >> $GITHUB_OUTPUT
+          echo "🔗 Your config link:"
+          echo "$CONFIG"
+
+      - name: Save config to file
+        run: |
+          echo "${{ steps.config.outputs.config_link }}" > config.txt
+
+      - name: Upload config as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xray-config
+          path: config.txt
+
+      - name: Show config in job summary
+        run: |
+          echo "## 🔗 لینک کانفیگ Trojan شما" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "```" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.config.outputs.config_link }}" >> $GITHUB_STEP_SUMMARY
+          echo "```" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### نحوه استفاده:" >> $GITHUB_STEP_SUMMARY
+          echo "- نام کاربری: **foxyjoon** | رمز عبور: **limo-sokhary**" >> $GITHUB_STEP_SUMMARY
+
+      - name: Keep runner alive
+        run: |
+          echo "🕒 Keeping runner alive for 6 hours. Press Cancel workflow to stop."
+          sleep 6h
