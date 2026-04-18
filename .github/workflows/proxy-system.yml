@@ -2,11 +2,11 @@ name: Proxy Auto-Builder
 
 on:
   schedule:
-    - cron: '0 */6 * * *'   # هر ۶ ساعت یکبار
+    - cron: '0 */6 * * *'
   workflow_dispatch:
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -23,26 +23,34 @@ jobs:
           UUID: ${{ secrets.UUID }}
         run: python builder.py
 
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./public
-          destination_dir: .        # محتوا در ریشه منتشر می‌شود
-          keep_files: false
-
-      - name: Also deploy configs as separate folder
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./configs
-          destination_dir: configs
-          keep_files: true
-
-      - name: Write site URL in job summary
+      - name: Commit and push generated files
         run: |
-          echo "✅ سایت شما در آدرس زیر منتشر شد:" >> $GITHUB_STEP_SUMMARY
-          echo "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/" >> $GITHUB_STEP_SUMMARY
+          git config user.name "github-actions[bot]"
+          git config user.email "actions@github.com"
+          git add index.html subscription.txt vless.txt vmess.txt trojan.txt public/ configs/
+          git diff --quiet && git diff --staged --quiet || git commit -m "Auto-update configs and panel"
+          git push
+
+      - name: Write links to job summary
+        run: |
+          REPO="${{ github.repository }}"
+          OWNER="${{ github.repository_owner }}"
+          echo "## ✅ کانفیگ‌ها با موفقیت ساخته و در مخزن ذخیره شدند" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "📁 لینک سابسکریپشن ترکیبی:" >> $GITHUB_STEP_SUMMARY
-          echo "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/configs/subscription.txt" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔗 لینک‌های مستقیم (قابل استفاده در کلاینت)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| نوع | لینک |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|------|" >> $GITHUB_STEP_SUMMARY
+          echo "| سابسکریپشن ترکیبی | \`https://raw.githubusercontent.com/${REPO}/main/subscription.txt\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| VLESS | \`https://raw.githubusercontent.com/${REPO}/main/vless.txt\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| VMESS | \`https://raw.githubusercontent.com/${REPO}/main/vmess.txt\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Trojan | \`https://raw.githubusercontent.com/${REPO}/main/trojan.txt\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📁 پنل وب (نمایش اطلاعات)" >> $GITHUB_STEP_SUMMARY
+          echo "برای مشاهده پنل، فایل \`index.html\` را از مخزن دانلود کرده و در مرورگر باز کنید." >> $GITHUB_STEP_SUMMARY
+          echo "لینک مستقیم: \`https://raw.githubusercontent.com/${REPO}/main/index.html\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "💡 **نحوه استفاده در کلاینت:**" >> $GITHUB_STEP_SUMMARY
+          echo "1. در کلاینت خود (V2rayNG, Nekobox, Clash) گزینه **Add Subscription** را بزنید." >> $GITHUB_STEP_SUMMARY
+          echo "2. لینک **سابسکریپشن ترکیبی** بالا را در کادر وارد کنید." >> $GITHUB_STEP_SUMMARY
+          echo "3. ذخیره کنید و اتصال را فعال کنید." >> $GITHUB_STEP_SUMMARY
