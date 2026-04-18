@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-پروکسی بیلدر حرفه‌ای - اسکن IP تمیز، تولید کانفیگ و ساخت پنل
+پروکسی بیلدر خودکار - اسکن IP تمیز، تولید کانفیگ، ساخت پنل HTML
+خروجی: پوشه public/ (پنل) و configs/ (فایل‌های کانفیگ) و همچنین کپی فایل‌ها در ریشه
 """
 
 import os
 import json
 import base64
-import subprocess
 import urllib.request
+import shutil
 from datetime import datetime
 
-# ======================== تنظیمات اولیه ========================
-UUID = os.environ.get("UUID", "4f28d01c-8a0a-4c31-9e1c-8c5c5a8c5c5a")  # از Secrets می‌گیرد
+# ======================== تنظیمات ========================
+UUID = os.environ.get("UUID", "b3e5e5b8-0e1d-4f8a-8e5c-6f2e5a1b9c8d")
 WORK_DIR = "public"
 CONFIG_DIR = "configs"
 
@@ -21,7 +22,7 @@ os.makedirs(CONFIG_DIR, exist_ok=True)
 
 # ======================== ۱. دریافت IPهای تمیز ========================
 def get_clean_ips():
-    """دریافت IPهای تمیز کلاودفلیر از چند منبع مختلف"""
+    """دریافت IPهای تمیز کلاودفلیر از منابع مختلف"""
     ip_list = []
     sources = [
         "https://raw.githubusercontent.com/ip-scanner/cloudflare/main/ips.txt",
@@ -35,29 +36,31 @@ def get_clean_ips():
                 data = f.read().decode()
                 ips = [line.strip() for line in data.splitlines() if line.strip() and ":" in line]
                 if ips:
-                    ip_list.extend(ips[:30])  # حداکثر 30 تا
+                    ip_list.extend(ips[:30])
                     break
-        except:
+        except Exception:
             continue
-    # اگر هیچ IPی از منابع نیامد، از لیست پیش‌فرض استفاده کن
+
     if not ip_list:
         ip_list = [
             "104.18.0.0:443", "104.16.0.0:443", "104.20.0.0:443",
             "172.67.0.0:443", "188.114.96.0:443"
         ]
-    # تست ساده اتصال (اختیاری - برای سرعت می‌توان حذف کرد)
+    
+    # تست ساده اتصال
     good_ips = []
-    for ip in ip_list[:10]:
+    for ip in ip_list[:15]:
+        addr = ip.split(":")[0]
         try:
-            with urllib.request.urlopen(f"https://{ip.split(':')[0]}/", timeout=3) as _:
-                good_ips.append(ip)
-        except:
+            urllib.request.urlopen(f"https://{addr}", timeout=2)
+            good_ips.append(ip)
+        except Exception:
             pass
     return good_ips if good_ips else ip_list[:10]
 
-# ======================== ۲. تولید کانفیگ با IPهای تمیز ========================
+# ======================== ۲. تولید کانفیگ‌ها ========================
 def generate_configs(ips):
-    """تولید کانفیگ‌های VLESS، VMESS و Trojan"""
+    """تولید کانفیگ VLESS، VMESS، Trojan و سابسکریپشن base64"""
     vless_list = []
     vmess_list = []
     trojan_list = []
@@ -66,15 +69,12 @@ def generate_configs(ips):
         addr = ip.split(":")[0]
         port = ip.split(":")[1] if ":" in ip else "443"
 
-        # کانفیگ VLESS
         vless = f"vless://{UUID}@{addr}:{port}?encryption=none&security=tls&sni=www.microsoft.com&type=tcp&flow=xtls-rprx-vision#Clean-{addr}"
         vless_list.append(vless)
 
-        # کانفیگ Trojan
         trojan = f"trojan://{UUID}@{addr}:{port}?security=tls&sni=www.bing.com#Clean-{addr}"
         trojan_list.append(trojan)
 
-        # کانفیگ VMESS
         vmess_obj = {
             "v": "2",
             "ps": f"Clean-{addr}",
@@ -91,7 +91,6 @@ def generate_configs(ips):
         vmess = "vmess://" + base64.b64encode(json.dumps(vmess_obj).encode()).decode()
         vmess_list.append(vmess)
 
-    # ذخیره فایل‌ها
     with open(f"{CONFIG_DIR}/vless.txt", "w") as f:
         f.write("\n".join(vless_list))
     with open(f"{CONFIG_DIR}/vmess.txt", "w") as f:
@@ -99,42 +98,42 @@ def generate_configs(ips):
     with open(f"{CONFIG_DIR}/trojan.txt", "w") as f:
         f.write("\n".join(trojan_list))
 
-    # سابسکریپشن ترکیبی (base64)
     all_configs = vless_list + vmess_list + trojan_list
     sub_b64 = base64.b64encode("\n".join(all_configs).encode()).decode()
     with open(f"{CONFIG_DIR}/subscription.txt", "w") as f:
         f.write(sub_b64)
 
+    # کپی فایل‌های مهم به ریشه برای دسترسی راحت
+    shutil.copy(f"{CONFIG_DIR}/subscription.txt", "subscription.txt")
+    shutil.copy(f"{CONFIG_DIR}/vless.txt", "vless.txt")
+    shutil.copy(f"{CONFIG_DIR}/vmess.txt", "vmess.txt")
+    shutil.copy(f"{CONFIG_DIR}/trojan.txt", "trojan.txt")
+
     return {"vless": vless_list, "vmess": vmess_list, "trojan": trojan_list}
 
 # ======================== ۳. ساخت پنل HTML ========================
-def build_html_panel(ips, configs):
-    """تولید فایل index.html با اطلاعات به‌روز"""
-    ip_table_rows = ""
+def build_html_panel(ips):
+    """ایجاد فایل index.html برای نمایش اطلاعات و لینک‌های دانلود"""
+    ip_rows = ""
     for ip in ips:
-        ip_table_rows += f"<tr><td>{ip.split(':')[0]}</td><td>{ip.split(':')[1]}</td><td>✅ فعال</td></tr>"
+        addr = ip.split(":")[0]
+        port = ip.split(":")[1]
+        ip_rows += f"<tr><td>{addr}</td><td>{port}</td><td>✅ فعال</td></td>"
 
-    # آدرس سابسکریپشن (بعد از دیپلوی روی Pages)
-    base_url = "https://" + os.environ.get("GITHUB_REPOSITORY", "").split("/")[0] + ".github.io/" + os.environ.get("GITHUB_REPOSITORY", "").split("/")[1] + "/"
-    sub_link = base_url + "configs/subscription.txt"
-    vless_link = base_url + "configs/vless.txt"
-    vmess_link = base_url + "configs/vmess.txt"
-    trojan_link = base_url + "configs/trojan.txt"
-
-    html_content = f"""<!DOCTYPE html>
+    html = f"""<!DOCTYPE html>
 <html dir="rtl" lang="fa">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>پنل حرفه‌ای پروکسی</title>
+    <title>پنل پروکسی خودکار</title>
     <style>
         body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0a0f1e; color: #e0e0e0; margin: 0; padding: 20px; }}
-        .container {{ max-width: 1000px; margin: auto; background: #151e2c; border-radius: 15px; padding: 20px; box-shadow: 0 5px 20px rgba(0,0,0,0.3); }}
+        .container {{ max-width: 1000px; margin: auto; background: #151e2c; border-radius: 15px; padding: 20px; }}
         h1, h2 {{ color: #3b82f6; text-align: center; }}
         .card {{ background: #1e2a3a; border-radius: 12px; padding: 15px; margin: 15px 0; }}
         .config-box {{ background: #0f172a; padding: 12px; border-radius: 8px; font-family: monospace; word-break: break-all; }}
         a {{ color: #60a5fa; text-decoration: none; }}
-        button {{ background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; margin: 5px; }}
+        button {{ background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; }}
         table {{ width: 100%; border-collapse: collapse; }}
         th, td {{ padding: 8px; text-align: center; border-bottom: 1px solid #334155; }}
         .footer {{ text-align: center; font-size: 12px; color: #6b7280; margin-top: 20px; }}
@@ -143,71 +142,56 @@ def build_html_panel(ips, configs):
 <body>
 <div class="container">
     <h1>🚀 پنل مدیریت پروکسی خودکار</h1>
-    <p>تاریخ آخرین بروزرسانی: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</p>
+    <p>تاریخ بروزرسانی: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</p>
 
     <div class="card">
-        <h2>🔗 لینک‌های سابسکریپشن (در کلاینت وارد کنید)</h2>
+        <h2>📥 لینک‌های مستقیم کانفیگ (روی لینک کلیک کنید)</h2>
         <div class="config-box">
-            📡 <strong>VLESS:</strong> <a href="{vless_link}">{vless_link}</a><br>
-            📡 <strong>VMESS:</strong> <a href="{vmess_link}">{vmess_link}</a><br>
-            📡 <strong>Trojan:</strong> <a href="{trojan_link}">{trojan_link}</a><br>
-            🔄 <strong>سابسکریپشن ترکیبی (Base64):</strong> <a href="{sub_link}">{sub_link}</a>
+            🔹 <strong>VLESS</strong> – <a href="vless.txt" target="_blank">vless.txt</a><br>
+            🔹 <strong>VMESS</strong> – <a href="vmess.txt" target="_blank">vmess.txt</a><br>
+            🔹 <strong>Trojan</strong> – <a href="trojan.txt" target="_blank">trojan.txt</a><br>
+            🔄 <strong>سابسکریپشن (Base64)</strong> – <a href="subscription.txt" target="_blank">subscription.txt</a>
         </div>
-        <button onclick="copyAllLinks()">📋 کپی همه لینک‌ها</button>
+        <p>⚠️ برای استفاده در کلاینت، لینک سابسکریپشن را در قسمت Subscription وارد کنید.</p>
     </div>
 
     <div class="card">
         <h2>🌐 IPهای تمیز فعال</h2>
         <table>
-            <thead><tr><th>آدرس IP</th><th>پورت</th><th>وضعیت</th></tr></thead>
-            <tbody>{ip_table_rows}</tbody>
+            <thead><tr><th>IP</th><th>پورت</th><th>وضعیت</th></tr></thead>
+            <tbody>{ip_rows}</tbody>
         </table>
     </div>
 
     <div class="card">
-        <h2>⚙️ تنظیمات UUID</h2>
-        <p>UUID فعلی: <code>{UUID}</code></p>
-        <p>برای تغییر، در مخزن گیت‌هاب به <code>Settings → Secrets → UUID</code> بروید و سپس workflow را مجدد اجرا کنید.</p>
+        <h2>⚙️ UUID جاری</h2>
+        <p><code>{UUID}</code></p>
+        <p>برای تغییر، در مخزن گیت‌هاب به <code>Settings → Secrets → UUID</code> مراجعه کنید.</p>
     </div>
 
     <div class="footer">
         ساخته شده با ❤️ توسط GitHub Actions | بروزرسانی خودکار هر ۶ ساعت
     </div>
 </div>
-<script>
-function copyAllLinks() {{
-    const links = document.querySelectorAll('.config-box a');
-    let text = '';
-    links.forEach(link => text += link.href + '\\n');
-    navigator.clipboard.writeText(text);
-    alert('✅ لینک‌ها کپی شدند');
-}}
-</script>
 </body>
 </html>"""
     with open(f"{WORK_DIR}/index.html", "w", encoding="utf-8") as f:
-        f.write(html_content)
+        f.write(html)
+    # کپی index.html به ریشه
+    shutil.copy(f"{WORK_DIR}/index.html", "index.html")
 
-# ======================== ۴. فایل config.txt (لینک سابسکریپشن) ========================
-def create_config_txt(sub_link):
-    with open("config.txt", "w") as f:
-        f.write(f"لینک سابسکریپشن ترکیبی:\n{sub_link}\n")
-        f.write("برای استفاده در کلاینت‌های V2rayNG، Nekobox، Clash و ... کافی است این لینک را وارد کنید.\n")
-
-# ======================== اجرای اصلی ========================
+# ======================== ۴. اجرای اصلی ========================
 def main():
     print("🚀 شروع فرآیند ساخت پروکسی...")
     ips = get_clean_ips()
     print(f"✅ {len(ips)} IP تمیز پیدا شد.")
-    configs = generate_configs(ips)
-    build_html_panel(ips, configs)
-    # لینک سابسکریپشن نهایی (بعد از دیپلوی روی Pages)
-    repo_name = os.environ.get("GITHUB_REPOSITORY", "")
-    user = repo_name.split("/")[0] if "/" in repo_name else ""
-    sub_link = f"https://{user}.github.io/{repo_name.split('/')[1]}/configs/subscription.txt" if user else ""
-    create_config_txt(sub_link)
+    generate_configs(ips)
+    build_html_panel(ips)
     print("✅ همه فایل‌ها با موفقیت ساخته شدند.")
-    print("📁 پوشه public حاوی پنل و پوشه configs حاوی کانفیگ‌هاست.")
+    print("📁 فایل‌های زیر در ریشه مخزن و پوشه configs/ قرار دارند:")
+    print("   - index.html (پنل)")
+    print("   - subscription.txt (سابسکریپشن)")
+    print("   - vless.txt, vmess.txt, trojan.txt")
 
 if __name__ == "__main__":
     main()
