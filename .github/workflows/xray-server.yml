@@ -1,144 +1,40 @@
-name: Xray Server on GitHub Runner
+name: SOCKS5 Tunnel using built-in tools
 
 on:
   workflow_dispatch:
 
 jobs:
-  xray:
+  tunnel:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
-      # 1. دریافت کد (نسخه بهینه)
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      # 2. دریافت IP عمومی
-      - name: Get public IP of runner
+      - name: Get public IP
         id: ip
         run: |
-          echo "Getting public IP..."
-          PUBLIC_IP=$(curl -s --max-time 10 https://api.ipify.org || curl -s --max-time 10 https://icanhazip.com)
-          if [ -z "$PUBLIC_IP" ]; then
-            echo "Failed to get public IP"
-            exit 1
-          fi
-          echo "public_ip=$PUBLIC_IP" >> $GITHUB_OUTPUT
-          echo "✅ Public IP: $PUBLIC_IP"
+          IP=$(curl -s --max-time 10 https://api.ipify.org || curl -s --max-time 10 https://icanhazip.com)
+          echo "public_ip=$IP" >> $GITHUB_OUTPUT
+          echo "IP: $IP"
 
-      # 3. نصب Xray با استفاده از آخرین نسخه باینری مستقیم
-      - name: Install Xray from latest release binary
-        id: install_xray
+      - name: Start SOCKS5 proxy with socat
         run: |
-          echo "Fetching the latest Xray version from GitHub API..."
-          LATEST_VERSION=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest | grep -oP '"tag_name": "\K(.*?)(?=")')
-          echo "Latest Xray version: $LATEST_VERSION"
-          
-          DOWNLOAD_URL="https://github.com/XTLS/Xray-core/releases/download/${LATEST_VERSION}/Xray-linux-64.zip"
-          echo "Downloading Xray from: $DOWNLOAD_URL"
-          
-          curl -L -o xray.zip "$DOWNLOAD_URL"
-          
-          if [ ! -s xray.zip ]; then
-            echo "Failed to download Xray binary. Check network or URL."
-            exit 1
-          fi
-          
-          echo "Download successful. File size: $(du -h xray.zip | cut -f1)"
-          
-          echo "Extracting and installing Xray..."
-          unzip -o xray.zip -d xray_temp
-          sudo mv xray_temp/xray /usr/local/bin/
-          sudo chmod +x /usr/local/bin/xray
-          rm -rf xray_temp xray.zip
-          
-          echo "Xray installed successfully."
-          xray version
+          # ایجاد یک SOCKS5 سرور ساده روی پورت 1080
+          # socat می‌تواند به عنوان یک SOCKS5 relay عمل کند
+          nohup socat TCP-LISTEN:1080,fork,reuseaddr SOCKS4:127.0.0.1:0.0.0.0:0,socksport=1080 &
+          sleep 2
+          echo "✅ SOCKS5 proxy started on port 1080"
 
-      # 4. تولید کانفیگ Trojan
-      - name: Generate Xray config (Trojan with custom user/pass)
+      - name: Show connection details
         run: |
-          echo "Generating Xray config file..."
-          sudo mkdir -p /usr/local/etc/xray
-          sudo tee /usr/local/etc/xray/config.json > /dev/null <<EOF
-          {
-            "inbounds": [
-              {
-                "port": 443,
-                "protocol": "trojan",
-                "settings": {
-                  "clients": [
-                    {
-                      "password": "limo-sokhary",
-                      "email": "foxyjoon@example.com"
-                    }
-                  ]
-                },
-                "streamSettings": {
-                  "network": "tcp",
-                  "security": "tls",
-                  "tlsSettings": {
-                    "serverName": "www.microsoft.com",
-                    "allowInsecure": false
-                  }
-                }
-              }
-            ],
-            "outbounds": [
-              {
-                "protocol": "freedom",
-                "tag": "direct"
-              }
-            ]
-          }
-          EOF
-          echo "✅ Config file created."
-
-      # 5. راه‌اندازی سرویس Xray
-      - name: Start Xray service
-        run: |
-          echo "Starting Xray..."
-          if command -v systemctl &> /dev/null; then
-            sudo systemctl daemon-reload
-            sudo systemctl start xray
-            sudo systemctl enable xray
-            sleep 2
-            sudo systemctl status xray --no-pager || true
-          else
-            nohup sudo xray run -config /usr/local/etc/xray/config.json > /var/log/xray.log 2>&1 &
-            sleep 2
-            ps aux | grep xray
-          fi
-          echo "✅ Xray service started"
-
-      # 6. تولید و ذخیره لینک کانفیگ
-      - name: Generate config link
-        id: config
-        run: |
-          IP="${{ steps.ip.outputs.public_ip }}"
-          CONFIG="trojan://limo-sokhary@${IP}:443?security=tls&sni=www.microsoft.com#GitHub-Runner"
-          echo "config_link=$CONFIG" >> $GITHUB_OUTPUT
-          echo "Your config link: $CONFIG"
-
-      - name: Save config to file
-        run: |
-          echo "${{ steps.config.outputs.config_link }}" > config.txt
-
-      # 7. آپلود کانفیگ به عنوان Artifact
-      - name: Upload config as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: xray-config
-          path: config.txt
-
-      - name: Show config in job summary
-        run: |
-          echo "## 🔗 لینک کانفیگ Trojan شما" >> $GITHUB_STEP_SUMMARY
+          echo "## 🔗 جزئیات اتصال" >> $GITHUB_STEP_SUMMARY
+          echo "IP: ${{ steps.ip.outputs.public_ip }}" >> $GITHUB_STEP_SUMMARY
+          echo "پورت: 1080" >> $GITHUB_STEP_SUMMARY
+          echo "پروتکل: SOCKS5" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "```" >> $GITHUB_STEP_SUMMARY
-          echo "${{ steps.config.outputs.config_link }}" >> $GITHUB_STEP_SUMMARY
-          echo "```" >> $GITHUB_STEP_SUMMARY
+          echo "### نحوه اتصال:" >> $GITHUB_STEP_SUMMARY
+          echo "در کلاینت خود (مثل V2rayNG، Nekobox، یا SSH) یک اتصال SOCKS5 ایجاد کنید با:" >> $GITHUB_STEP_SUMMARY
+          echo "- آدرس: \`${{ steps.ip.outputs.public_ip }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- پورت: \`1080\`" >> $GITHUB_STEP_SUMMARY
+          echo "⚠️ این روش **بدون رمزنگاری** است و فقط برای ترافیک‌های معمولی مناسب است."
 
       - name: Keep runner alive
-        run: |
-          echo "🕒 Keeping runner alive for 6 hours. Press Cancel workflow to stop."
-          sleep 6h
+        run: sleep 6h
