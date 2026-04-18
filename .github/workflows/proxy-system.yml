@@ -3,10 +3,10 @@ name: Proxy Auto-Builder
 on:
   schedule:
     - cron: '0 */6 * * *'   # هر ۶ ساعت یکبار
-  workflow_dispatch:         # قابلیت اجرای دستی
+  workflow_dispatch:
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -21,7 +21,6 @@ jobs:
       - name: Run builder script
         env:
           UUID: ${{ secrets.UUID }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
         run: python builder.py
 
       - name: Deploy to GitHub Pages
@@ -29,12 +28,21 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./public
+          destination_dir: .        # محتوا در ریشه منتشر می‌شود
           keep_files: false
 
-      - name: Upload configs as artifact
-        uses: actions/upload-artifact@v4
+      - name: Also deploy configs as separate folder
+        uses: peaceiris/actions-gh-pages@v3
         with:
-          name: proxy-configs
-          path: |
-            configs/
-            config.txt
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./configs
+          destination_dir: configs
+          keep_files: true
+
+      - name: Write site URL in job summary
+        run: |
+          echo "✅ سایت شما در آدرس زیر منتشر شد:" >> $GITHUB_STEP_SUMMARY
+          echo "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📁 لینک سابسکریپشن ترکیبی:" >> $GITHUB_STEP_SUMMARY
+          echo "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/configs/subscription.txt" >> $GITHUB_STEP_SUMMARY
