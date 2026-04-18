@@ -1,0 +1,40 @@
+name: Proxy Auto-Builder
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'   # هر ۶ ساعت یکبار
+  workflow_dispatch:         # قابلیت اجرای دستی
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run builder script
+        env:
+          UUID: ${{ secrets.UUID }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python builder.py
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
+          keep_files: false
+
+      - name: Upload configs as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: proxy-configs
+          path: |
+            configs/
+            config.txt
