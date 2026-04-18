@@ -1,0 +1,99 @@
+name: Xray Server on GitHub Runner
+
+on:
+  workflow_dispatch:  # فقط با اجرای دستی شروع می‌شود
+
+jobs:
+  xray:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360  # 6 ساعت حداکثر (می‌توانید کمتر کنید)
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get public IP of runner
+        id: ip
+        run: |
+          PUBLIC_IP=$(curl -s https://api.ipify.org)
+          echo "public_ip=$PUBLIC_IP" >> $GITHUB_OUTPUT
+          echo "IP: $PUBLIC_IP"
+
+      - name: Install Xray
+        run: |
+          bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
+
+      - name: Generate Xray config (Trojan with your username/password)
+        run: |
+          sudo mkdir -p /usr/local/etc/xray
+          sudo tee /usr/local/etc/xray/config.json > /dev/null <<EOF
+          {
+            "inbounds": [
+              {
+                "port": 443,
+                "protocol": "trojan",
+                "settings": {
+                  "clients": [
+                    {
+                      "password": "limo-sokhary",
+                      "email": "foxyjoon@example.com"
+                    }
+                  ]
+                },
+                "streamSettings": {
+                  "network": "tcp",
+                  "security": "tls",
+                  "tlsSettings": {
+                    "serverName": "www.microsoft.com",
+                    "allowInsecure": false
+                  }
+                }
+              }
+            ],
+            "outbounds": [
+              {
+                "protocol": "freedom",
+                "tag": "direct"
+              }
+            ]
+          }
+          EOF
+
+      - name: Start Xray
+        run: |
+          sudo systemctl start xray
+          sudo systemctl enable xray
+          sleep 3
+          sudo systemctl status xray --no-pager
+
+      - name: Generate config link
+        id: config
+        run: |
+          IP="${{ steps.ip.outputs.public_ip }}"
+          CONFIG="trojan://limo-sokhary@${IP}:443?security=tls&sni=www.microsoft.com#GitHub-Runner"
+          echo "config_link=$CONFIG" >> $GITHUB_OUTPUT
+          echo "✅ کانفیگ شما ساخته شد:"
+          echo "$CONFIG"
+
+      - name: Save config to file (for later use)
+        run: |
+          echo "${{ steps.config.outputs.config_link }}" > config.txt
+          echo "کانفیگ در فایل config.txt ذخیره شد."
+
+      - name: Upload config as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xray-config
+          path: config.txt
+
+      - name: Show config in job summary
+        run: |
+          echo "## 🔗 لینک کانفیگ Trojan شما" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "```" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.config.outputs.config_link }}" >> $GITHUB_STEP_SUMMARY
+          echo "```" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "این لینک را در کلاینت خود (مثل Hiddify، Nekobox، V2rayNG) وارد کنید." >> $GITHUB_STEP_SUMMARY
+
+      - name: Keep runner alive for 6 hours
+        run: sleep 6h
