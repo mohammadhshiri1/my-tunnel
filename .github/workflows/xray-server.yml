@@ -1,4 +1,4 @@
-name: SOCKS5 Tunnel (Working)
+name: FRP Tunnel
 
 on:
   workflow_dispatch:
@@ -8,46 +8,48 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
-      - name: Install socat
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y socat
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Get public IP
         id: ip
         run: |
-          IP=$(curl -s --max-time 10 https://api.ipify.org || curl -s --max-time 10 https://icanhazip.com)
+          IP=$(curl -s https://api.ipify.org)
           echo "public_ip=$IP" >> $GITHUB_OUTPUT
-          echo "IP: $IP"
+          echo "✅ IP: $IP"
 
-      - name: Start SOCKS5 proxy
+      - name: Download FRP
         run: |
-          nohup socat TCP-LISTEN:1080,fork,reuseaddr TCP:127.0.0.1:1080 &
-          sleep 2
-          echo "✅ SOCKS5 proxy started"
+          wget https://github.com/fatedier/frp/releases/download/v0.58.0/frp_0.58.0_linux_amd64.tar.gz
+          tar -xzf frp_0.58.0_linux_amd64.tar.gz
+          sudo mv frp_0.58.0_linux_amd64/frps /usr/local/bin/
+          sudo mv frp_0.58.0_linux_amd64/frpc /usr/local/bin/
+          rm -rf frp_0.58.0_linux_amd64*
 
-      - name: Display config (visible in logs)
+      - name: Start FRP server
+        run: |
+          nohup sudo /usr/local/bin/frps -c ./frps.ini &
+          sleep 3
+
+      - name: Start FRP client
+        run: |
+          nohup sudo /usr/local/bin/frpc -c ./frpc.ini &
+          sleep 3
+
+      - name: Show connection info
         run: |
           echo "====================================="
-          echo "🔗 کانفیگ SOCKS5 شما:"
-          echo "آدرس: ${{ steps.ip.outputs.public_ip }}"
-          echo "پورت: 1080"
-          echo "پروتکل: SOCKS5"
+          echo "✅ تونل با موفقیت برقرار شد"
+          echo "آدرس سرور: ${{ steps.ip.outputs.public_ip }}"
+          echo "پورت SOCKS5: 1080"
           echo "====================================="
-          echo "${{ steps.ip.outputs.public_ip }}:1080" > config.txt
+          echo "SOCKS5://${{ steps.ip.outputs.public_ip }}:1080" > config.txt
 
-      - name: Upload config as artifact
+      - name: Upload config
         uses: actions/upload-artifact@v4
         with:
-          name: socks5-config
+          name: frp-config
           path: config.txt
 
-      - name: Save to job summary
-        run: |
-          echo "## 🔗 کانفیگ SOCKS5 شما" >> $GITHUB_STEP_SUMMARY
-          echo "آدرس: \`${{ steps.ip.outputs.public_ip }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "پورت: \`1080\`" >> $GITHUB_STEP_SUMMARY
-          echo "پروتکل: \`SOCKS5\`" >> $GITHUB_STEP_SUMMARY
-
-      - name: Keep runner alive (6 hours)
+      - name: Keep runner alive
         run: sleep 6h
