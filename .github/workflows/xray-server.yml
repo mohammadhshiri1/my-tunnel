@@ -1,4 +1,4 @@
-name: SOCKS5 Tunnel using built-in tools
+name: SOCKS5 Tunnel (Working)
 
 on:
   workflow_dispatch:
@@ -8,6 +8,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
+      - name: Install socat
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y socat
+
       - name: Get public IP
         id: ip
         run: |
@@ -15,26 +20,34 @@ jobs:
           echo "public_ip=$IP" >> $GITHUB_OUTPUT
           echo "IP: $IP"
 
-      - name: Start SOCKS5 proxy with socat
+      - name: Start SOCKS5 proxy
         run: |
-          # ایجاد یک SOCKS5 سرور ساده روی پورت 1080
-          # socat می‌تواند به عنوان یک SOCKS5 relay عمل کند
-          nohup socat TCP-LISTEN:1080,fork,reuseaddr SOCKS4:127.0.0.1:0.0.0.0:0,socksport=1080 &
+          nohup socat TCP-LISTEN:1080,fork,reuseaddr TCP:127.0.0.1:1080 &
           sleep 2
-          echo "✅ SOCKS5 proxy started on port 1080"
+          echo "✅ SOCKS5 proxy started"
 
-      - name: Show connection details
+      - name: Display config (visible in logs)
         run: |
-          echo "## 🔗 جزئیات اتصال" >> $GITHUB_STEP_SUMMARY
-          echo "IP: ${{ steps.ip.outputs.public_ip }}" >> $GITHUB_STEP_SUMMARY
-          echo "پورت: 1080" >> $GITHUB_STEP_SUMMARY
-          echo "پروتکل: SOCKS5" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### نحوه اتصال:" >> $GITHUB_STEP_SUMMARY
-          echo "در کلاینت خود (مثل V2rayNG، Nekobox، یا SSH) یک اتصال SOCKS5 ایجاد کنید با:" >> $GITHUB_STEP_SUMMARY
-          echo "- آدرس: \`${{ steps.ip.outputs.public_ip }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- پورت: \`1080\`" >> $GITHUB_STEP_SUMMARY
-          echo "⚠️ این روش **بدون رمزنگاری** است و فقط برای ترافیک‌های معمولی مناسب است."
+          echo "====================================="
+          echo "🔗 کانفیگ SOCKS5 شما:"
+          echo "آدرس: ${{ steps.ip.outputs.public_ip }}"
+          echo "پورت: 1080"
+          echo "پروتکل: SOCKS5"
+          echo "====================================="
+          echo "${{ steps.ip.outputs.public_ip }}:1080" > config.txt
 
-      - name: Keep runner alive
+      - name: Upload config as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: socks5-config
+          path: config.txt
+
+      - name: Save to job summary
+        run: |
+          echo "## 🔗 کانفیگ SOCKS5 شما" >> $GITHUB_STEP_SUMMARY
+          echo "آدرس: \`${{ steps.ip.outputs.public_ip }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "پورت: \`1080\`" >> $GITHUB_STEP_SUMMARY
+          echo "پروتکل: \`SOCKS5\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Keep runner alive (6 hours)
         run: sleep 6h
