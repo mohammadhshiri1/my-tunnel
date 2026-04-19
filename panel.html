@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="fa">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>پنل مدیریت پروکسی | تنظیمات پیشرفته</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0a0f1e;
+            color: #e0e0e0;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: auto;
+            background: #151e2c;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+        }
+        h1, h2 { color: #3b82f6; text-align: center; }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #9ca3af;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            background: #1e2a3a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+        }
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+            width: 100%;
+        }
+        button:hover { background: #2563eb; }
+        .status {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .success { background: #064e3b; color: #a7f3d0; }
+        .error { background: #7f1d1d; color: #fecaca; }
+        .info { background: #1e3a8a; color: #bfdbfe; }
+        .ip-list {
+            background: #0f172a;
+            padding: 10px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        hr { border-color: #334155; margin: 20px 0; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🚀 پنل مدیریت پروکسی پیشرفته</h1>
+    <p>تنظیمات سفارشی خود را وارد کنید. پس از ذخیره، workflow را اجرا کنید.</p>
+
+    <div class="form-group">
+        <label>🔑 UUID (شناسه کاربر)</label>
+        <input type="text" id="uuid" placeholder="b3e5e5b8-0e1d-4f8a-8e5c-6f2e5a1b9c8d">
+    </div>
+
+    <div class="form-group">
+        <label>🌐 IPهای تمیز (هر خط یک IP:PORT)</label>
+        <textarea id="ips" rows="5" placeholder="مثال:
+104.18.0.0:443
+104.16.0.0:443
+172.67.0.0:443"></textarea>
+        <small>IPهایی که خودتان تست کرده‌اید و سالم هستند.</small>
+    </div>
+
+    <div class="form-group">
+        <label>🎯 SNI (Server Name Indication)</label>
+        <input type="text" id="sni" placeholder="www.microsoft.com" value="www.microsoft.com">
+    </div>
+
+    <div class="form-group">
+        <label>🛡️ پروتکل TLS (معمولاً tls بگذارید)</label>
+        <select id="security">
+            <option value="tls">tls</option>
+            <option value="reality">reality (پیشرفته)</option>
+            <option value="none">بدون رمزنگاری</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label>📡 نوع ترنسپورت (transport)</label>
+        <select id="network">
+            <option value="tcp">tcp</option>
+            <option value="ws">websocket</option>
+            <option value="grpc">grpc</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label>🔌 پورت (پیش‌فرض 443)</label>
+        <input type="text" id="port" value="443">
+    </div>
+
+    <hr>
+
+    <button id="saveBtn">💾 ذخیره تنظیمات در مخزن گیت‌هاب</button>
+    <button id="runBtn" style="background:#10b981;">▶️ اجرای workflow (ساخت کانفیگ)</button>
+
+    <div id="status" class="status"></div>
+
+    <div class="info">
+        <strong>📌 نکته:</strong> برای استفاده از این پنل، باید یک <strong>Personal Access Token</strong> با دسترسی <code>repo</code> و <code>workflow</code> بسازید و در کد جاگذاری کنید (یا در localStorage ذخیره کنید).
+    </div>
+</div>
+
+<script>
+    // تنظیمات اولیه – توکن گیت‌هاب خود را اینجا وارد کنید
+    // بهتر است این توکن را در localStorage ذخیره کنید یا از کاربر بپرسید
+    let GITHUB_TOKEN = ''; // کاربر باید وارد کند
+    const REPO_OWNER = 'mohammadhshiri1';   // نام کاربری گیت‌هاب خود را وارد کنید
+    const REPO_NAME = 'my-tunnel';          // نام مخزن
+
+    // تابع برای درخواست توکن از کاربر (یکبار)
+    function askForToken() {
+        let token = localStorage.getItem('github_token');
+        if (!token) {
+            token = prompt('لطفاً GitHub Personal Access Token خود را وارد کنید (دسترسی repo و workflow):');
+            if (token) localStorage.setItem('github_token', token);
+        }
+        GITHUB_TOKEN = token;
+        return GITHUB_TOKEN;
+    }
+
+    // بارگذاری تنظیمات جاری از فایل settings.json در مخزن
+    async function loadSettings() {
+        if (!askForToken()) return;
+        const url = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/settings.json`;
+        try {
+            const res = await fetch(url, {
+                headers: { 'Authorization': `token ${GITHUB_TOKEN}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                const content = atob(data.content);
+                const settings = JSON.parse(content);
+                document.getElementById('uuid').value = settings.uuid || '';
+                document.getElementById('ips').value = (settings.ips || []).join('\n');
+                document.getElementById('sni').value = settings.sni || 'www.microsoft.com';
+                document.getElementById('security').value = settings.security || 'tls';
+                document.getElementById('network').value = settings.network || 'tcp';
+                document.getElementById('port').value = settings.port || '443';
+                showStatus('تنظیمات جاری بارگذاری شد.', 'success');
+            } else {
+                showStatus('فایل settings.json وجود ندارد. تنظیمات پیش‌فرض استفاده می‌شود.', 'info');
+            }
+        } catch(e) {
+            showStatus('خطا در بارگذاری: ' + e.message, 'error');
+        }
+    }
+
+    // ذخیره تنظیمات در مخزن
+    async function saveSettings() {
+        if (!askForToken()) return;
+        const settings = {
+            uuid: document.getElementById('uuid').value,
+            ips: document.getElementById('ips').value.split('\n').filter(line => line.trim() !== ''),
+            sni: document.getElementById('sni').value,
+            security: document.getElementById('security').value,
+            network: document.getElementById('network').value,
+            port: document.getElementById('port').value
+        };
+        const content = btoa(JSON.stringify(settings, null, 2));
+        const url = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/settings.json`;
+        // ابتدا sha فایل را بگیریم (برای آپدیت)
+        let sha = '';
+        try {
+            const res = await fetch(url, { headers: { 'Authorization': `token ${GITHUB_TOKEN}` } });
+            if (res.ok) {
+                const data = await res.json();
+                sha = data.sha;
+            }
+        } catch(e) {}
+        const body = {
+            message: 'Update settings from panel',
+            content: content,
+            branch: 'main'
+        };
+        if (sha) body.sha = sha;
+        const res = await fetch(url, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `token ${GITHUB_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+        });
+        if (res.ok) {
+            showStatus('✅ تنظیمات با موفقیت در مخزن ذخیره شد.', 'success');
+        } else {
+            const err = await res.json();
+            showStatus('❌ خطا در ذخیره: ' + (err.message || 'مشخص نیست'), 'error');
+        }
+    }
+
+    // اجرای workflow (ساخت کانفیگ)
+    async function runWorkflow() {
+        if (!askForToken()) return;
+        const url = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/actions/workflows/proxy-system.yml/dispatches`;
+        const body = {
+            ref: 'main'
+        };
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `token ${GITHUB_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+        });
+        if (res.ok) {
+            showStatus('✅ workflow با موفقیت اجرا شد. چند دقیقه بعد کانفیگ‌ها به‌روز می‌شوند.', 'success');
+        } else {
+            const err = await res.json();
+            showStatus('❌ خطا در اجرا: ' + (err.message || 'مشخص نیست'), 'error');
+        }
+    }
+
+    function showStatus(msg, type) {
+        const div = document.getElementById('status');
+        div.innerHTML = msg;
+        div.className = `status ${type}`;
+        setTimeout(() => { if(div.innerHTML === msg) div.innerHTML = ''; }, 5000);
+    }
+
+    document.getElementById('saveBtn').addEventListener('click', saveSettings);
+    document.getElementById('runBtn').addEventListener('click', runWorkflow);
+    loadSettings();
+</script>
+</body>
+</html>
