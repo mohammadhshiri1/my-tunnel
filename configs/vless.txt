@@ -1,5 +1,2 @@
-vless://b3e5e5b8-0e1d-4f8a-8e5c-6f2e5a1b9c8d@104.18.0.0:443?encryption=none&security=tls&sni=www.microsoft.com&type=tcp&flow=xtls-rprx-vision#Clean-104.18.0.0
-vless://b3e5e5b8-0e1d-4f8a-8e5c-6f2e5a1b9c8d@104.16.0.0:443?encryption=none&security=tls&sni=www.microsoft.com&type=tcp&flow=xtls-rprx-vision#Clean-104.16.0.0
-vless://b3e5e5b8-0e1d-4f8a-8e5c-6f2e5a1b9c8d@104.20.0.0:443?encryption=none&security=tls&sni=www.microsoft.com&type=tcp&flow=xtls-rprx-vision#Clean-104.20.0.0
-vless://b3e5e5b8-0e1d-4f8a-8e5c-6f2e5a1b9c8d@172.67.0.0:443?encryption=none&security=tls&sni=www.microsoft.com&type=tcp&flow=xtls-rprx-vision#Clean-172.67.0.0
-vless://b3e5e5b8-0e1d-4f8a-8e5c-6f2e5a1b9c8d@188.114.96.0:443?encryption=none&security=tls&sni=www.microsoft.com&type=tcp&flow=xtls-rprx-vision#Clean-188.114.96.0
+vless://b3e5e5b8-0e1d-4f8a-8e5c-6f2e5a1b9c8d@104.18.0.0:443?encryption=none&security=tls&sni=www.microsoft.com&type=tcp#Custom-104.18.0.0
+vless://b3e5e5b8-0e1d-4f8a-8e5c-6f2e5a1b9c8d@104.16.0.0:443?encryption=none&security=tls&sni=www.microsoft.com&type=tcp#Custom-104.16.0.0
